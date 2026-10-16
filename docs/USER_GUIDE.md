@@ -801,12 +801,12 @@ ESP32内部维护5种工作状态：
 ## 📞 技术支持
 
 - **远程仓库**: 
-  - GitHub: [ESP32-S3_MobileNetV2-OV5640](https://github.com/TachengXiaochen/ESP32-S3_MobileNetV2-OV5640)
+  - GitHub: [ESP32-S3_MobileNetV2-OV5640](https://github.com/TachengXiaochen/esp32-s3-visual-inventory)
   - Gitee镜像: [ESP32-S3_MobileNetV2-OV5640](https://gitee.com/star-flash-smart-inventory/ESP32-S3_MobileNetV2-OV5640)
 - **项目主页**: [星闪智能盘点系统](https://gitee.com/star-flash-smart-inventory)
 - **WS63端仓库**: [ws63_bs2x_sle_project](https://gitee.com/star-flash-smart-inventory/ws63_bs2x_sle_project) (主要负责人)
 - **问题反馈**: 
-  - GitHub Issues: [GitHub Issues](https://github.com/TachengXiaochen/ESP32-S3_MobileNetV2-OV5640/issues)
+  - GitHub Issues: [GitHub Issues](https://github.com/TachengXiaochen/esp32-s3-visual-inventory/issues)
   - Gitee Issues: [Gitee Issues](https://gitee.com/star-flash-smart-inventory/ESP32-S3_MobileNetV2-OV5640/issues)
 - **技术文档**: [docs/](docs/) 目录
 - **邮箱**: 202500201056@stumail.sztu.edu.cn

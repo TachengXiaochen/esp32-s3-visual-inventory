@@ -1,30 +1,39 @@
-# ESP32-S3 CAM AI 资产管理系统 v3.6
+# ESP32-S3 视觉盘点终端
 
-> 基于 **ESP32-S3 + OV5640摄像头 + MobileNetV2** 的智能资产管理系统，通过三视图加权综合判断实现高精度物品识别和盘点。**v3.6** 核心升级：main.c 去上帝化重构（464→133行），全局变量分组（app_context_t），运行时稳定性修复（DMA重试、互斥锁分离、blur检测修正）。
+基于 ESP32-S3、OV5640 与 MobileNetV2 的视觉盘点终端，通过多视图特征匹配完成资产注册、盘点与出库，并提供本地存储、串口通信和 Web 调试入口。
+
+A visual inventory terminal built with ESP32-S3, OV5640, and MobileNetV2, supporting multi-view asset matching, stock management, local storage, and serial communication.
+
+## 项目概述
+
+| 项目 | 说明 |
+| --- | --- |
+| 目标硬件 | ESP32-S3（带 PSRAM）、OV5640、MicroSD / TF 卡 |
+| 技术栈 | ESP-IDF、C / C++、esp-dl、MobileNetV2 |
+| 通信方式 | UART CLI、WS63 JSON 协议、可选 L610 / MQTT |
+| 文档基线 | v3.6；性能数据沿用原文标注的历史版本记录 |
+
+## 主要功能
+
+-  **Tag ID 标识** v3.2：16位十六进制唯一标识（`0x0001`-`0xFFFF`，支持65,535个资产）
+-  **验证式更新** v3.2：Tag ID已存在时，拍摄正视图进行身份验证后方可累加数量
+-  **纯余弦相似度验证** v3.5：移除无效的Euclidean混合，统一阈值0.90，区分度显著提升
+-  **特征识别** v3.5：MobileNetV2 GAP 1280维语义特征提取 + 自适应帧数（1-3帧）+ 模糊度检测
+-  **推理优化** v3.5：三视图全流程从30-60s降至8.5s（降低80-85%），移除800ms人为延迟
+-  **三视图分析**：正面/侧面/顶部加权综合置信度评估
+-  **双线程架构**：拍摄与推理分离
+-  **TF卡存储**：完整资产管理（名称、区域、数量）
+-  **出库模式**：仅拍摄正视图快速比对，自动更新库存
+-  **资产删除**：一键删除资产及关联图片
+-  **LED状态指示**：WS2812 RGB实时反馈系统状态
+-  **WS63协议**：UART1 JSON通信，支持远程调度（v3.0）
+-  **L610 4G模块**：MQTT云端通信 + 主动上报机制（v3.1）
+-  **业务执行器架构** v3.4：business_executor 统一处理业务逻辑，双通道输出（CLI文本/JSON协议）
+-  **Web实时预览** v3.5：WiFi SoftAP + MJPEG流 + 系统状态面板（调试用，实际演示不需要）
 
 ---
 
-## ✨ 核心特性
-
-- 🆔 **Tag ID 标识** ⭐v3.2：16位十六进制唯一标识（`0x0001`-`0xFFFF`，支持65,535个资产）
-- ✅ **验证式更新** ⭐v3.2：Tag ID已存在时，拍摄正视图进行身份验证后方可累加数量
-- 🔍 **纯余弦相似度验证** ⭐v3.5：移除无效的Euclidean混合，统一阈值0.90，区分度显著提升
-- 🎯 **智能识别** ⭐v3.5：MobileNetV2 GAP 1280维语义特征提取 + 自适应帧数（1-3帧）+ 模糊度检测
-- ⚡ **极速推理** ⭐v3.5：三视图全流程从30-60s降至8.5s（降低80-85%），移除800ms人为延迟
-- 📊 **三视图分析**：正面/侧面/顶部加权综合置信度评估
-- 🔀 **双线程架构**：拍摄与推理分离，响应速度提升37倍
-- 💾 **TF卡存储**：完整资产管理（名称、区域、数量）
-- 🚪 **出库模式**：仅拍摄正视图快速比对，自动更新库存
-- 🗑️ **资产删除**：一键删除资产及关联图片
-- 💡 **LED状态指示**：WS2812 RGB实时反馈系统状态
-- 📡 **WS63协议**：UART1 JSON通信，支持远程调度（v3.0）
-- 📶 **L610 4G模块**：MQTT云端通信 + 主动上报机制（v3.1）
-- 🏗️ **业务执行器架构** ⭐v3.4：business_executor 统一处理业务逻辑，双通道输出（CLI文本/JSON协议）
-- 🌐 **Web实时预览** ⭐v3.5：WiFi SoftAP + MJPEG流 + 系统状态面板（调试用，实际演示不需要）
-
----
-
-## 🚀 快速开始
+## 快速开始
 
 ### 硬件要求
 
@@ -58,7 +67,7 @@ idf.py flash monitor
 
 ---
 
-## 📖 功能说明
+## 功能说明
 
 ### 1. 资产注册（Register）
 
@@ -75,7 +84,7 @@ idf.py flash monitor
 }
 ```
 
-**模式B：验证式更新（已有资产累加）** ⭐v3.2
+**模式B：验证式更新（已有资产累加）** v3.2
 ```json
 {
   "cmd": "register",
@@ -84,14 +93,14 @@ idf.py flash monitor
 }
 ```
 - Tag ID已存在时，必须拍摄正视图进行身份验证
-- **相似度≥0.90才允许累加数量** ⭐v3.5：阈值从0.75提升至0.90
+- **相似度≥0.90才允许累加数量** v3.5：阈值从0.75提升至0.90
 - 验证失败明确拒绝，防止错误操作
 
 ### 2. 资产盘点（Inventory）
 
 **流程**：拍摄三视图 → 自适应帧数融合 → GAP特征匹配 → 返回置信度
 
-**特点** ⭐v3.5：
+**特点** v3.5：
 - **自适应帧数**：默认每视图1帧，边缘情况自动补充至3帧（blur_score ∈ [12.5, 37.5]）
 - **GAP 1280维特征**：替代1000维分类logits，语义表达能力更强
 - **拉普拉斯方差算法**：降采样2×（160×120）过滤模糊图像，速度提升4倍
@@ -111,14 +120,14 @@ idf.py flash monitor
 
 ---
 
-## 📡 WS63协议支持（v3.0）
+## WS63协议支持（v3.0）
 
 ### 硬件连接
 
 ```
 WS63                          ESP32-S3
-├── RX ◄──────── GPIO47 (TX) ──┤  ⭐ v3.4: 从 GPIO17 迁移至 GPIO47，解决与摄像头 DVP 冲突
-├── TX ────────► GPIO21 (RX) ──┤  ⭐ v3.4: 从 GPIO18 迁移至 GPIO21
+├── RX ◄──────── GPIO47 (TX) ──┤   v3.4: 从 GPIO17 迁移至 GPIO47，解决与摄像头 DVP 冲突
+├── TX ────────► GPIO21 (RX) ──┤   v3.4: 从 GPIO18 迁移至 GPIO21
 └── GND ───────── GND ─────────┘
 ```
 
@@ -130,13 +139,13 @@ WS63                          ESP32-S3
 |------|------|------|
 | `register` | 资产注册（含验证式更新） | `{"cmd":"register","tag_id":"0x0001","item_name":"扳手","quantity":50}` |
 | `inventory` | 资产盘点 | `{"cmd":"inventory","item_name":"扳手"}` |
-| `outbound` | 出库核验（分步控制）⭐v3.4 | `{"cmd":"outbound","tag_id":"0x0001","remove_qty":5}` |
+| `outbound` | 出库核验（分步控制）v3.4 | `{"cmd":"outbound","tag_id":"0x0001","remove_qty":5}` |
 | `capture` | 分步拍摄 | `{"cmd":"capture","view":"front"}` |
 | `delete` | 删除资产 | `{"cmd":"delete","tag_id":"0x0001"}` |
 | `list_assets` | 查询列表 | `{"cmd":"list_assets"}` |
 | `sys_info` | 系统信息 | `{"cmd":"sys_info"}` |
-| `ping` | 心跳检测 ⭐v3.4 | `{"cmd":"ping"}` |
-| `get_asset` | 单个资产详情 ⭐v3.4 | `{"cmd":"get_asset","tag_id":"0x0001"}` |
+| `ping` | 心跳检测 v3.4 | `{"cmd":"ping"}` |
+| `get_asset` | 单个资产详情 v3.4 | `{"cmd":"get_asset","tag_id":"0x0001"}` |
 
 ### 上行消息
 
@@ -144,16 +153,16 @@ WS63                          ESP32-S3
 |------|------|
 | `capture_progress` | 拍摄进度（含模糊度评分） |
 | `task_done` | 任务完成结果 |
-| `verification_start` | ⭐验证开始提示（v3.2） |
-| `asset_info` | ⭐资产信息查询结果（含 remove_qty/remaining_qty，v3.4） |
+| `verification_start` | 验证开始提示（v3.2） |
+| `asset_info` | 资产信息查询结果（含 remove_qty/remaining_qty，v3.4） |
 | `asset_list` | 资产列表 |
-| `pong` | ⭐心跳响应（v3.4） |
-| `sys_info` | ⭐系统信息响应（v3.4） |
+| `pong` | 心跳响应（v3.4） |
+| `sys_info` | 系统信息响应（v3.4） |
 | `error` | 错误报告 |
 
-**详细协议规范**：查看 [docs/PROTOCOL/ESP32_WS63_PROTOCOL.md](docs/PROTOCOL/ESP32_WS63_PROTOCOL.md) ⭐v3.4
+**详细协议规范**：查看 [docs/PROTOCOL/ESP32_WS63_PROTOCOL.md](docs/PROTOCOL/ESP32_WS63_PROTOCOL.md) v3.4
 
-### Outbound 分步控制流程 ⭐v3.4
+### Outbound 分步控制流程 v3.4
 
 ```
 WS63                           ESP32
@@ -187,7 +196,7 @@ WS63                           ESP32
 
 ---
 
-## 📶 L610 4G模块集成（v3.1）
+## L610 4G模块集成（v3.1）
 
 ### 硬件连接
 
@@ -226,7 +235,7 @@ ESP32-S3                L610 Module
 {"cmd": "mqtt_disconnect"}
 ```
 
-### ⭐ 主动上报机制
+### 主动上报机制
 
 L610模块可主动向WS63上报事件：
 - MQTT意外断开 → `l610_error`
@@ -247,12 +256,12 @@ L610模块可主动向WS63上报事件：
 - `AT+CGATT?` - 网络附着状态
 
 **详细协议和调试指南**：
-- 协议规范：[docs/PROTOCOL.md](docs/PROTOCOL.md) §第11-19章
+- 协议规范：[L610 调试指南](docs/L610_DEBUG_GUIDE.md)
 - 调试指南：[docs/L610_DEBUG_GUIDE.md](docs/L610_DEBUG_GUIDE.md)
 
 ---
 
-## 🌐 Web实时预览（调试用，v3.5）
+## Web实时预览（调试用，v3.5）
 
 > **重要说明**：Web实时流仅用于调试和拍摄辅助，实际演示不需要。赛题要求WS63做AP/Host，ESP32不能做AP。
 
@@ -287,24 +296,24 @@ L610模块可主动向WS63上报事件：
 - **时序分离**: WiFi在SD卡、模型、摄像头全部初始化完毕3秒后才启动，避免PSRAM DMA竞争
 - **分区调整**: factory 6M→7M（固件膨胀70KB），storage 2M→1M（前端仅~10KB）
 
-**详细实施报告**：[docs/archive/20260609_WEB_LIVE_PREVIEW.md](docs/archive/20260609_WEB_LIVE_PREVIEW.md)
+Web 预览的使用与排障参见 [用户指南](docs/USER_GUIDE.md)。
 
 ---
 
-## 📚 文档导航
+## 文档导航
 
 **核心文档**：
-- 📘 **入门**: [QUICKSTART.md](docs/QUICKSTART.md) | [USER_GUIDE.md](docs/USER_GUIDE.md)
-- 📗 **协议**: 
-  - [ESP32_WS63_PROTOCOL.md](docs/PROTOCOL/ESP32_WS63_PROTOCOL.md) ⭐v3.4（主协议）
-  - [WS63_MONITOR_PROTOCOL.md](docs/PROTOCOL/WS63_MONITOR_PROTOCOL.md) ⭐v2.4（屏协议）
-- 📙 **调试**: [L610_DEBUG_GUIDE.md](docs/L610_DEBUG_GUIDE.md) | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+-  **入门**: [QUICKSTART.md](docs/QUICKSTART.md) | [USER_GUIDE.md](docs/USER_GUIDE.md)
+-  **协议**:
+  - [ESP32_WS63_PROTOCOL.md](docs/PROTOCOL/ESP32_WS63_PROTOCOL.md) v3.4（主协议）
+  - [WS63_MONITOR_PROTOCOL.md](docs/PROTOCOL/WS63_MONITOR_PROTOCOL.md) v2.4（屏协议）
+-  **调试**: [L610_DEBUG_GUIDE.md](docs/L610_DEBUG_GUIDE.md) | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
-**历史文档**: 查看 `docs/archive/` 目录
+历史版本记录见下方“版本历史”；更多使用与排障资料见 `docs/`。
 
 ---
 
-## 🔧 技术架构
+## 仓库结构与架构
 
 ### 模块化设计
 
@@ -314,11 +323,11 @@ main/
 │   ├── camera/          # 摄像头驱动（OV5640）
 │   ├── ai/              # AI推理引擎（MobileNetV2）
 │   ├── system/          # 系统管理（协议处理、状态机、验证器）
-│   │   ├── tag_id_validator.c/.h      # ⭐ Tag ID 验证器（v3.2）
-│   │   ├── verify_handler.c/.h        # ⭐ 身份验证处理器（v3.2）
-│   │   ├── business_executor.c/.h     # ⭐ 业务执行器（v3.4）- 统一命令处理+双通道输出
-│   │   ├── uart_handler_0.c/.h        # ⭐ CLI文本接口处理器（v3.4）
-│   │   └── uart_handler_1.c/.h        # ⭐ WS63 JSON协议处理器（v3.4）
+│   │   ├── tag_id_validator.c/.h      #  Tag ID 验证器（v3.2）
+│   │   ├── verify_handler.c/.h        #  身份验证处理器（v3.2）
+│   │   ├── business_executor.c/.h     #  业务执行器（v3.4）- 统一命令处理+双通道输出
+│   │   ├── uart_handler_0.c/.h        #  CLI文本接口处理器（v3.4）
+│   │   └── uart_handler_1.c/.h        #  WS63 JSON协议处理器（v3.4）
 │   └── 4g/              # L610 4G模块驱动（v3.1）
 └── app_main.c           # 应用入口
 ```
@@ -339,25 +348,25 @@ main/
 ### 关键技术
 
 - **标识方式**：16位十六进制Tag ID（`0x0001`-`0xFFFF`）
-- **验证算法**：**纯余弦相似度** ⭐v3.5，阈值**0.90**（移除无效的Euclidean混合）
-- **特征提取**：MobileNetV2 **GAP 1280维语义特征** ⭐v3.5（替代1000维logits）
+- **验证算法**：**纯余弦相似度** v3.5，阈值**0.90**（移除无效的Euclidean混合）
+- **特征提取**：MobileNetV2 **GAP 1280维语义特征** v3.5（替代1000维logits）
 - **模糊度检测**：拉普拉斯方差算法，降采样2×（160×120），速度提升4倍
-- **多帧融合**：**自适应帧数** ⭐v3.5，默认每视图1帧，边缘情况自动补充至3帧
+- **多帧融合**：**自适应帧数** v3.5，默认每视图1帧，边缘情况自动补充至3帧
 - **看门狗管理**：长耗时操作分段执行，定期复位
 
 ---
 
-## 📊 性能指标
+## 历史性能记录（v3.5）
 
 | 指标 | v3.4 | v3.5 | 说明 |
 |------|------|------|------|
-| 三视图推理时间 | 30-60s | **~8.5s** | ⭐降低80-85% |
-| 每视图帧数 | 3帧固定 | 1帧（边缘3帧） | ⭐自适应策略 |
-| 特征维度 | 1000 logits | **1280 GAP** | ⭐语义特征 |
-| 同物品cosine | ~1.0 (bug) | **>0.85** | ⭐修复覆盖bug |
-| 异物品cosine | ~1.0 (bug) | **0.55-0.65** | ⭐区分度提升 |
-| 匹配算法 | 70%cosine+30%euclidean | **100% cosine** | ⭐简化有效 |
-| 匹配阈值 | 0.70-0.85 | **0.90** | ⭐统一提升 |
+| 三视图推理时间 | 30-60s | **~8.5s** | 降低80-85% |
+| 每视图帧数 | 3帧固定 | 1帧（边缘3帧） | 自适应策略 |
+| 特征维度 | 1000 logits | **1280 GAP** | 语义特征 |
+| 同物品cosine | ~1.0 (bug) | **>0.85** | 修复覆盖bug |
+| 异物品cosine | ~1.0 (bug) | **0.55-0.65** | 区分度提升 |
+| 匹配算法 | 70%cosine+30%euclidean | **100% cosine** | 简化有效 |
+| 匹配阈值 | 0.70-0.85 | **0.90** | 统一提升 |
 | 单次拍摄时间 | ~800ms | ~600ms | 模糊检测降采样 |
 | 特征提取时间 | ~1.2s | ~0.9s | 移除冗余计算 |
 | 相似度计算 | <10ms | <10ms | 纯余弦更高效 |
@@ -366,7 +375,7 @@ main/
 
 ---
 
-## ⚠️ 注意事项
+## 注意事项
 
 1. **供电稳定**：L610模块峰值电流2A，建议使用独立电源
 2. **天线连接**：必须连接4G天线，否则信号极弱
@@ -378,13 +387,13 @@ main/
 
 ---
 
-## 🔄 版本历史
+## 版本历史
 
-- **v3.6** (2026-06-18): ⭐ 架构重构 + 稳定性修复（main.c 去上帝化 464→133行，app_context_t 全局变量分组，DMA 耗尽重试，互斥锁帧抓取/NN推理分离，blur 检测公式修正+传播，注册覆写控制，Web 配置修复）
-- **v3.5** (2026-06-09): ⭐ 性能优化 + 稳定性增强（AI推理速度提升80-85%，GAP 1280维特征提取，匹配算法修复为纯余弦+阈值0.90，状态机复位bug修复，Web实时预览调试功能）
-- **v3.4** (2026-06-05): ⭐ 架构重构 + GPIO 迁移（引入 business_executor 业务执行器，UART 处理器重构，GPIO17/18→47/21 解决摄像头冲突，outbound 分步控制，TX 诊断日志，step 动态化，补全 ping/sys_info/list_assets_page/get_asset 命令）
-- **v3.3** (2026-05-26): ⭐ 协议命令补全 + Tag ID 适配（delete/get_asset 改用 tag_id 字段，移除状态限制）
-- **v3.2** (2026-05-19): ⭐ Tag ID 改造（MAC地址→16位Tag ID，验证式数量累加，混合相似度验证）
+- **v3.6** (2026-06-18):  架构重构 + 稳定性修复（main.c 去上帝化 464→133行，app_context_t 全局变量分组，DMA 耗尽重试，互斥锁帧抓取/NN推理分离，blur 检测公式修正+传播，注册覆写控制，Web 配置修复）
+- **v3.5** (2026-06-09):  性能优化 + 稳定性增强（AI推理速度提升80-85%，GAP 1280维特征提取，匹配算法修复为纯余弦+阈值0.90，状态机复位bug修复，Web实时预览调试功能）
+- **v3.4** (2026-06-05):  架构重构 + GPIO 迁移（引入 business_executor 业务执行器，UART 处理器重构，GPIO17/18→47/21 解决摄像头冲突，outbound 分步控制，TX 诊断日志，step 动态化，补全 ping/sys_info/list_assets_page/get_asset 命令）
+- **v3.3** (2026-05-26):  协议命令补全 + Tag ID 适配（delete/get_asset 改用 tag_id 字段，移除状态限制）
+- **v3.2** (2026-05-19):  Tag ID 改造（MAC地址→16位Tag ID，验证式数量累加，混合相似度验证）
 - **v3.1** (2026-05-10): L610 4G模块完整集成（MQTT云端通信、主动上报机制、AT重试、Payload保护、资源清理）
 - **v3.0** (2026-04-29): WS63协议支持（JSON格式UART通信、分步拍摄控制）
 - **v2.6** (2026-04-28): 模糊度检测、混合相似度算法
@@ -393,21 +402,21 @@ main/
 
 ---
 
-## 📞 技术支持
+## 维护与反馈
 
-- **远程仓库**: 
-  - GitHub: [ESP32-S3_MobileNetV2-OV5640](https://github.com/TachengXiaochen/ESP32-S3_MobileNetV2-OV5640)
+- **远程仓库**:
+  - GitHub: [ESP32-S3_MobileNetV2-OV5640](https://github.com/TachengXiaochen/esp32-s3-visual-inventory)
   - Gitee镜像: [ESP32-S3_MobileNetV2-OV5640](https://gitee.com/star-flash-smart-inventory/ESP32-S3_MobileNetV2-OV5640)
 - **项目主页**: [星闪智能盘点系统](https://gitee.com/star-flash-smart-inventory)
 - **WS63端仓库**: [ws63_bs2x_sle_project](https://gitee.com/star-flash-smart-inventory/ws63_bs2x_sle_project) (主要负责人)
-- **问题反馈**: 
-  - GitHub Issues: [GitHub Issues](https://github.com/TachengXiaochen/ESP32-S3_MobileNetV2-OV5640/issues)
+- **问题反馈**:
+  - GitHub Issues: [GitHub Issues](https://github.com/TachengXiaochen/esp32-s3-visual-inventory/issues)
   - Gitee Issues: [Gitee Issues](https://gitee.com/star-flash-smart-inventory/ESP32-S3_MobileNetV2-OV5640/issues)
 - **技术文档**: [docs/](docs/) 目录
 - **邮箱**: 202500201056@stumail.sztu.edu.cn
 
 ---
 
-**许可证**: MIT  
-**维护者**: TcXc  
-**最后更新**: 2026-06-18
+**原有许可声明**：MIT；许可范围应结合各组件随附的许可文件确认
+**维护者**: TcXc
+**技术基线日期**：2026-06-18
